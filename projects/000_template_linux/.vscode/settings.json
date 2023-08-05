@@ -46,4 +46,14 @@
 
     // LINUX and macOS:
     "cmake.generator": "Unix Makefiles"
+
+    // WINDOWS - cmake does not reliably detect MSVC version and sometimes
+    // tries to generate projects for a version that is not installed
+    // Better provide templates for each version separately.
+    //
+    // "cmake.generator": "Visual Studio 15 2017"
+    // "cmake.generator": "Visual Studio 16 2019"
+    // "cmake.generator": "Visual Studio 17 2022"
+    // "cmake.generator": "MinGW Makefiles"
+    
 }

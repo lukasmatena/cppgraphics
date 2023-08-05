@@ -1,0 +1,59 @@
+{
+    // General intellisense settings. This does not affect compilation in any way.
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.intelliSenseEngine": "default", // Had problems before unless this was Tag Parser. But Tag Parser shows invalid include errors...
+    "C_Cpp.errorSquiggles": "disabled",    // No problems will be reported other than ones parsed from the output
+    "C_Cpp.dimInactiveRegions": true,
+    "C_Cpp.default.includePath": ["${workspaceFolder}/../../src"],
+    "C_Cpp.default.browse.path": ["${workspaceFolder}/../../src/*"],
+    "C_Cpp.default.browse.limitSymbolsToIncludedHeaders": true,
+    "C_Cpp.files.exclude": {
+        "**/.vscode": true
+    },
+
+    "editor.autoClosingBrackets": "never",
+    "editor.autoClosingDelete": "never",
+    "editor.autoClosingQuotes": "never",
+    "editor.comments.insertSpace": false,
+    "editor.folding": true,
+    "editor.insertSpaces": true,
+    "editor.matchBrackets": "always",
+    "editor.tabSize": 4,
+    "editor.detectIndentation": false,
+    "editor.trimAutoWhitespace": true,
+
+
+    // Files associations
+    "C_Cpp.autoAddFileAssociations": false,
+    "files.associations": {
+        "*.cpp": "cpp",
+        "*.hpp": "cpp",
+        "*.c": "c",
+        "*.h": "c"
+    },
+
+    
+    // CMake related.
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.buildBeforeRun": true,
+    "cmake.configureOnOpen": true,
+    "cmake.configureOnEdit": true,
+    "cmake.parseBuildDiagnostics": true,
+    "cmake.configureArgs": [
+        "-DCMAKE_PREFIX_PATH=${workspaceFolder}/../../deps/build/destdir/usr/local/"
+    ],
+
+
+    // LINUX and macOS:
+    "cmake.generator": "Unix Makefiles"
+
+    // WINDOWS - cmake does not reliably detect MSVC version and sometimes
+    // tries to generate projects for a version that is not installed
+    // Better provide templates for each version separately.
+    //
+    // "cmake.generator": "Visual Studio 15 2017"
+    // "cmake.generator": "Visual Studio 16 2019"
+    // "cmake.generator": "Visual Studio 17 2022"
+    // "cmake.generator": "MinGW Makefiles"
+    
+}
