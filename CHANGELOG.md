@@ -1,4 +1,4 @@
-VERSION 1.0.1 (????-??-??)
+VERSION 1.0.1 (2023-09-28)
 ==========================
 
 - Template project for Windows was separated so there is a distinct template for each MSVC version. CMake's heuristics for detecting the generator seem not to be reliable.
