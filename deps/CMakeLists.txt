@@ -1,8 +1,13 @@
 # This CMake project downloads, configures and builds cppgraphics dependencies on Unix and Windows.
 # It is a greatly simplified deps-handling CMake from [PrusaSlicer](https://github.com/prusa3d/PrusaSlicer).
 
+cmake_minimum_required(VERSION 3.13)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
+
 project(cppgraphics-deps)
-cmake_minimum_required(VERSION 3.2)
 
 include(ExternalProject)
 
