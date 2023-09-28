@@ -13666,6 +13666,8 @@ void create_window(const std::string& title, double width, double height, bool f
     glEnable( GL_BLEND );
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDisable( GL_DEPTH_TEST );
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
     static const std::array<float, 16> ident = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
     glUniformMatrix4fv( glGetUniformLocation( g_state.shader_program, "u_transform" ), 1, GL_FALSE, ident.data() );
 
@@ -14418,8 +14420,8 @@ void BatchToDraw::push_image(GLuint texture,
     constexpr cg::Color col = {0.f, 0.f, 0.f, -1.f}; // so that fragment shader uses a texture
 
     va.emplace_back(cg::Vertex{col, wr.x, wr.y, tr.x, tr.y});
-    va.emplace_back(cg::Vertex{col, wr.x+wr.width, wr.y, tr.x+tr.width, tr.y});
     va.emplace_back(cg::Vertex{col, wr.x, wr.y+wr.height, tr.x, tr.y+tr.height});
+    va.emplace_back(cg::Vertex{col, wr.x+wr.width, wr.y, tr.x+tr.width, tr.y});
     va.emplace_back(cg::Vertex{col, wr.x, wr.y+wr.height, tr.x, tr.y+tr.height});
     va.emplace_back(cg::Vertex{col, wr.x+wr.width, wr.y+wr.height, tr.x+tr.width, tr.y+tr.height});
     va.emplace_back(cg::Vertex{col, wr.x+wr.width, wr.y, tr.x+tr.width, tr.y});
@@ -14509,17 +14511,32 @@ void clear()
 
 
 
+static bool is_triangle_ccw(double x1, double y1, double x2, double y2, double x3, double y3)
+{
+    bool ccw = ((x2-x1)*(y3-y1)-(y2-y1)*(x3-x1)) < 0.;
+    return ccw;
+}
+
+
+
 // Internal function to draw a triangle without outline and using a given color.
 // The triangle is appended into a vertex array.
 // When no color is given, g_state.blend_colors are used. In that case,
 // flip_colors flag is used to render second triangle in a rectangle.
-static void triangle_internal(double x1, double y1, double x2, double y2,
-                              double x3, double y3, const cg::Color* const color,
-                              bool flip_colors = false)
+static void triangle_internal(double x1, double y1, double x2, double y2, double x3, double y3,
+                              const cg::Color* const color1, const cg::Color* color2 = nullptr, const cg::Color* color3 = nullptr)
 {
-    g_state.current_batch->push_vertex(cg::Vertex{color ? *color : g_state.blend_colors[flip_colors ? 2 : 0], float(x1), float(y1), 0.f, 0.f});
-    g_state.current_batch->push_vertex(cg::Vertex{color ? *color : g_state.blend_colors[flip_colors ? 1 : 1], float(x2), float(y2), 0.f, 0.f});
-    g_state.current_batch->push_vertex(cg::Vertex{color ? *color : g_state.blend_colors[flip_colors ? 3 : 2], float(x3), float(y3), 0.f, 0.f});
+    // All triangles should now be ccw. Internal cppgraphics functions only pass ccw,
+    // anything from the user should be already reoriented by now.
+    assert( is_triangle_ccw(x1, y1, x2, y2, x3, y3));
+
+    if (! color2)
+        color2 = color1;
+    if (! color3)
+        color3 = color1;
+    g_state.current_batch->push_vertex(cg::Vertex{*color1, float(x1), float(y1), 0.f, 0.f});
+    g_state.current_batch->push_vertex(cg::Vertex{*color2, float(x2), float(y2), 0.f, 0.f});
+    g_state.current_batch->push_vertex(cg::Vertex{*color3, float(x3), float(y3), 0.f, 0.f});
 }
 
 
@@ -14527,6 +14544,11 @@ static void triangle_internal(double x1, double y1, double x2, double y2,
 void triangle(double x1, double y1, double x2, double y2, double x3, double y3)
 {
     terminate_if_no_window(__FUNCTION__);
+
+    if (! is_triangle_ccw(x1, y1, x2, y2, x3, y3)) {
+        std::swap(x2, x3);
+        std::swap(y2, y3);
+    }
 
     const double t = g_state.thickness;
     const bool one_layer = t <= 0. || g_state.color == g_state.fill_color;
@@ -14595,8 +14617,13 @@ void triangle(double x1, double y1, double x2, double y2, double x3, double y3)
 void triangle_blend(double x1, double y1, double x2, double y2, double x3, double y3)
 {
     terminate_if_no_window(__FUNCTION__);
-
-    triangle_internal(x1, y1, x2, y2, x3, y3, nullptr);
+    const bool was_ccw = is_triangle_ccw(x1, y1, x2, y2, x3, y3);
+    if (! was_ccw) {
+        std::swap(x2, x3);
+        std::swap(y2, y3);
+    }
+    const auto& bc = g_state.blend_colors;
+    triangle_internal(x1, y1, x2, y2, x3, y3, &bc[0], &bc[was_ccw ? 1 : 2], &bc[was_ccw ? 2 : 1]);
 }
 
 
@@ -14612,21 +14639,21 @@ void rectangle(double x, double y, double a, double b)
 
     if (one_layer) {
         // two simple triangles are enough
-        triangle_internal(x, y, x+a, y, x, y+b, too_thick ? &g_state.color : &g_state.fill_color);
+        triangle_internal(x, y, x, y+b, x+a, y, too_thick ? &g_state.color : &g_state.fill_color);
         triangle_internal(x, y+b, x+a, y+b, x+a, y, too_thick ? &g_state.color : &g_state.fill_color);
     } else {
         // If we got here, thickness is not zero. Draw outline.
         if (inside_opaque) {
             // we can save few triangles
-            triangle_internal(x, y, x+a, y, x, y+b, &g_state.color);
+            triangle_internal(x, y, x, y+b, x+a, y, &g_state.color);
             triangle_internal(x, y+b, x+a, y+b, x+a, y, &g_state.color);
         } else {
             // inside is transparent - draw really just the outline
-            triangle_internal(x, y, x+a, y, x+a, y+t, &g_state.color);
-            triangle_internal(x, y, x+a, y+t, x, y+t, &g_state.color);
-            triangle_internal(x, y+b-t, x+a, y+b-t, x, y+b, &g_state.color);
+            triangle_internal(x, y, x+a, y+t, x+a, y, &g_state.color);
+            triangle_internal(x, y, x, y+t, x+a, y+t, &g_state.color);
+            triangle_internal(x, y+b-t, x, y+b, x+a, y+b-t, &g_state.color);
             triangle_internal(x, y+b, x+a, y+b, x+a, y+b-t, &g_state.color);
-            triangle_internal(x, y+t, x+t, y+t,x, y+b-t, &g_state.color);
+            triangle_internal(x, y+t, x, y+b-t, x+t, y+t, &g_state.color);
             triangle_internal(x, y+b-t,x+t, y+b-t, x+t, y+t, &g_state.color);
             triangle_internal(x+a-t, y+t, x+a-t, y+b-t, x+a, y+t, &g_state.color);
             triangle_internal(x+a-t, y+b-t, x+a, y+b-t, x+a, y+t, &g_state.color);
@@ -14634,7 +14661,7 @@ void rectangle(double x, double y, double a, double b)
 
         // ...and then the inside.
         if (g_state.fill_color[3] != 0.) {
-            triangle_internal(x+t, y+t, x+a-t, y+t, x+t, y+b-t, &g_state.fill_color);
+            triangle_internal(x+t, y+t, x+t, y+b-t, x+a-t, y+t, &g_state.fill_color);
             triangle_internal(x+t, y+b-t, x+a-t, y+b-t, x+a-t, y+t, &g_state.fill_color);
         }
     }
@@ -14646,8 +14673,8 @@ void rectangle_blend(double x, double y, double a, double b)
 {
     terminate_if_no_window(__FUNCTION__);
 
-    triangle_internal(x, y, x+a, y, x, y+b, nullptr, false);
-    triangle_internal(x, y+b, x+a, y, x+a, y+b, nullptr, true);
+    triangle_internal(x, y, x, y+b, x+a, y, &g_state.blend_colors[0], &g_state.blend_colors[2], &g_state.blend_colors[1]);
+    triangle_internal(x, y+b, x+a, y+b, x+a, y, &g_state.blend_colors[2], &g_state.blend_colors[3], &g_state.blend_colors[1]);
 }
 
 
@@ -14664,12 +14691,11 @@ void circle(double x, double y, double r)
     // Any n-gon where n divides 192 can then be generated by striding those
     // values. (Just one quadrant would suffice, but readability.)
     auto generate_gon = []() {
-        double angle = 0.02; // When started from zero, artifacts were sometimes
-        // produced when line between triangles was at exactly 45 deg. This is
-        // the fastest fix (not the best). Hopefully it works for everyone.
+        double angle = 0.;
         std::vector<SinCos> out;
         for (int i=0; i<193; ++i, angle += 3.141592/96.)
             out.push_back({std::sin(angle), std::cos(angle)});
+        std::reverse(out.begin(), out.end());
         return out;
     };
     static const std::vector<SinCos> gon = generate_gon();
@@ -14705,9 +14731,9 @@ void circle(double x, double y, double r)
                 triangle_internal(x+r_inner*prev.cos, y+r_inner*prev.sin,
                                 x+r*prev.cos, y+r*prev.sin,
                                 x+r_inner*next.cos, y+r_inner*next.sin, &g_state.color);
-                triangle_internal(x+r*next.cos, y+r*next.sin,
-                                x+r*prev.cos, y+r*prev.sin,
-                                x+r_inner*next.cos, y+r_inner*next.sin, &g_state.color);
+                triangle_internal(x+r*prev.cos, y+r*prev.sin,
+                                  x+r*next.cos, y+r*next.sin,
+                                  x+r_inner*next.cos, y+r_inner*next.sin, &g_state.color);
             }
 
             // ...and then the inside.
